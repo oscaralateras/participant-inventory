@@ -38,6 +38,10 @@ The system is designed to support thousands of participant-level variables witho
 ### 5. Fast and Transparent Cohort Discovery
 Cohort queries are designed to be explicit, inspectable, and performant. Users should be able to understand not only *how many* participants meet criteria, but *why*.
 
+
+### 6. Forward-Compatible Architecture
+Core infrastructure decisions are made to support future extensions, including AI-assisted cohort feasibility analysis, derived variable tracking, and automated quality control, without reworking foundational components.
+
 ## MVP Scope
 
 The initial MVP focuses on establishing a reliable foundation for participant-level data ingestion and cohort discovery. The goal of this phase is to deliver a production-ready inventory backbone before introducing advanced analytics or AI-driven functionality.
@@ -163,5 +167,3 @@ These channels will be used to share development updates, architectural decision
 
 
 
-### 6. Forward-Compatible Architecture
-Core infrastructure decisions are made to support future extensions, including AI-assisted cohort feasibility analysis, derived variable tracking, and automated quality control, without reworking foundational components.

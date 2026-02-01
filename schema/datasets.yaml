@@ -1,0 +1,53 @@
+version: 1
+
+# Canonical participant identifier used internally
+participant_id_column: participant_id
+
+# Common aliases found in source files that should map to participant_id
+id_column_aliases:
+  participant_id: [SubjID]
+
+datasets:
+  basic_covariates:
+    source:
+      kind: xlsx
+      file_name: ENIGMA_MDD_Covariates.xlsx
+      sheet_name: Basic_Covariates_Template
+    required_id_columns: [participant_id]
+    update_policy: upsert_latest
+
+  individual_symptoms:
+    source:
+      kind: xlsx
+      file_name: ENIGMA_MDD_Covariates.xlsx
+      sheet_name: Individual_Symptom_Template
+    required_id_columns: [participant_id]
+    update_policy: upsert_latest
+
+  dti:
+    source:
+      kind: csv
+      file_name: DTI.csv
+    required_id_columns: [participant_id]
+    update_policy: upsert_latest
+
+  cortical_thickness:
+    source:
+      kind: csv
+      file_name: CorticalMeasuresENIGMA_ThickAvg_orig.csv
+    required_id_columns: [participant_id]
+    update_policy: upsert_latest
+
+  subcortical_volumes:
+    source:
+      kind: csv
+      file_name: LandRvolumes.csv
+    required_id_columns: [participant_id]
+    update_policy: upsert_latest
+
+  cortical_surface_area:
+    source:
+      kind: csv
+      file_name: CorticalMeasurersENIGMA_SurfAvg_orig.csv
+    required_id_columns: [participant_id]
+    update_policy: upsert_latest

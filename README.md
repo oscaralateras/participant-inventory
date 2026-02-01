@@ -134,6 +134,8 @@ The repository is organised to clearly separate user interfaces, core business l
 ├── pyproject.toml        # Project configuration and dependencies
 └── README.md
 
+```
+
 ## Development Status
 
 This project is in active development.

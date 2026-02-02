@@ -1,4 +1,5 @@
 import logging
+import pandas as pd
 from sqlalchemy import text
 
 from src.core.schema_registry import SchemaRegistry
@@ -81,14 +82,77 @@ def create_all_tables(schema: SchemaRegistry, engine) -> None:
     
     logger.info(f"Successfully created {len(schema.dataset_names)} tables")
 
+def upsert_dataset(
+    dataset: str,
+    df: pd.DataFrame,
+    schema: SchemaRegistry,
+    engine,
+) -> None:
+    """
+    Insert or update rows from a DataFrame into the dataset's table.
+    
+    Uses Postgres UPSERT (ON CONFLICT DO UPDATE) so:
+    - New participant_ids are inserted
+    - Existing participant_ids are updated with new values
+    
+    Args:
+        dataset: Name of the dataset/table
+        df: DataFrame with standardized data
+        schema: SchemaRegistry 
+        engine: SQLAlchemy engine
+    """
+    column_names = df.columns.tolist()
+
+    if dataset not in schema.dataset_names:
+        logger.error(f"Unknown dataset '{dataset}'")
+        raise ValueError(f"Unknown dataset '{dataset}'")
+    
+    columns_str = ", ".join(column_names)
+    placeholders = ", ".join([f":{col}" for col in column_names])
+    update_cols = [col for col in column_names if col != schema.participant_id_column]
+    update_set = ", ".join([f"{col} = EXCLUDED.{col}" for col in update_cols])
+
+    insert_sql = f"""
+    INSERT INTO {dataset} ({columns_str})
+    VALUES ({placeholders})
+    ON CONFLICT (participant_id)
+    DO UPDATE SET {update_set}
+    """
+
+    with engine.connect() as conn:
+        for idx, row in df.iterrows():
+            row_dict = row.to_dict()
+            conn.execute(text(insert_sql), row_dict)
+        conn.commit()
+        logger.info(f"Upserted {len(df)} rows into table '{dataset}'")
+
+
+
 if __name__ == "__main__":
     import logging
     from src.core.schema_registry import load_schema_registry
+    from src.core.bulk_import import bulk_load_datasets
     
+    # Set up logging
     logging.basicConfig(level=logging.INFO)
     
+    # Load schema
     schema = load_schema_registry("schema/datasets.yaml", "schema/variables.csv")
+    
+    # Get database engine
     engine = get_engine()
     
-    # Create all tables
+    # Create all tables (if they don't exist)
     create_all_tables(schema, engine)
+    
+    # Load all datasets from raw files
+    dfs = bulk_load_datasets(
+        data_dir="data/raw",
+        schema=schema,
+    )
+    
+    # Upsert each dataset into its table
+    for dataset_name, df in dfs.items():
+        upsert_dataset(dataset_name, df, schema, engine)
+    
+    print(f"\n✓ Successfully upserted {len(dfs)} datasets into Postgres")

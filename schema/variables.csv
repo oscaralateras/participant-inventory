@@ -159,7 +159,7 @@ dti,ACR_R,acr_r,False,FLOAT
 dti,ALIC,alic,False,FLOAT
 dti,ALIC_L,alic_l,False,FLOAT
 dti,ALIC_R,alic_r,False,FLOAT
-dti,AverageFA,averagefa,False,INTEGER
+dti,AverageFA,averagefa,False,FLOAT
 dti,BCC,bcc,False,FLOAT
 dti,CC,cc,False,FLOAT
 dti,CGC,cgc,False,FLOAT

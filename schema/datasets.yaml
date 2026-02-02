@@ -13,6 +13,7 @@ datasets:
       kind: xlsx
       file_name: ENIGMA_MDD_Covariates.xlsx
       sheet_name: Basic_Covariates_Template
+      header_row: 1
     required_id_columns: [participant_id]
     update_policy: upsert_latest
 
@@ -21,6 +22,7 @@ datasets:
       kind: xlsx
       file_name: ENIGMA_MDD_Covariates.xlsx
       sheet_name: Individual_Symptom_Template
+      header_row: 0
     required_id_columns: [participant_id]
     update_policy: upsert_latest
 
@@ -48,6 +50,6 @@ datasets:
   cortical_surface_area:
     source:
       kind: csv
-      file_name: CorticalMeasurersENIGMA_SurfAvg_orig.csv
+      file_name: CorticalMeasuresENIGMA_SurfAvg_orig.csv
     required_id_columns: [participant_id]
     update_policy: upsert_latest

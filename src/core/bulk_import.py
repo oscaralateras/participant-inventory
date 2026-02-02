@@ -21,7 +21,7 @@ def bulk_load_datasets(
     Bulk-load all datasets that have files present in a folder.
 
     For each dataset defined in datasets.yaml, this:
-      - checks whether the expected file exists in data_dir
+      - checks whether expected file exists in data_dir
       - if present, loads + standardises it via load_dataset_frame(...)
       - stores the cleaned DataFrame in a dict keyed by dataset name
 

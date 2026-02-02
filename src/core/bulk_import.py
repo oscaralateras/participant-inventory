@@ -1,11 +1,5 @@
 from __future__ import annotations
 
-# Bulk import orchestration:
-# - scans a folder for raw dataset files
-# - uses load_dataset_frame(...) to standardise each dataset
-# - returns a dict of cleaned DataFrames (dataset -> df)
-# - optionally writes cleaned Parquet files for caching/reuse
-
 import logging
 from pathlib import Path
 
@@ -41,6 +35,7 @@ def bulk_load_datasets(
     Returns:
         Dict mapping dataset -> cleaned DataFrame.
     """
+    # Convert data_dir to Path object for consistent path operations
     data_dir = Path(data_dir)
 
     # Validate input folder exists
@@ -49,50 +44,55 @@ def bulk_load_datasets(
         logger.error(msg)
         raise ValueError(msg)
 
-    # Optional output folder for cached parquet files
+    # Set up optional output folder for cached parquet files
     cache_path: Path | None = None
     if cache_dir is not None:
         cache_path = Path(cache_dir)
-        cache_path.mkdir(parents=True, exist_ok=True)
+        cache_path.mkdir(parents=True, exist_ok=True)  # Create if doesn't exist
 
-    # Pull dataset definitions from the schema YAML
+    # Extract the datasets block from the loaded YAML schema
     datasets_block = schema.datasets_yaml.get("datasets", {}) or {}
     if not isinstance(datasets_block, dict):
         msg = "SchemaRegistry.datasets_yaml['datasets'] must be a dict"
         logger.error(msg)
         raise ValueError(msg)
 
+    # Dictionary to store all successfully loaded datasets
     results: dict[str, pd.DataFrame] = {}
 
-    # Iterate over datasets registered in the schema
+    # Iterate over all dataset names registered in the schema
     for dataset in sorted(schema.dataset_names):
+        # Get configuration for this specific dataset from the YAML
         dataset_cfg = datasets_block.get(dataset, {}) or {}
         source_cfg = (dataset_cfg.get("source") or {})
 
-        # Expected filename for this dataset
+        # Extract expected filename for this dataset
         file_name = source_cfg.get("file_name")
         if not file_name:
             logger.warning("Dataset '%s' missing source.file_name in datasets.yaml; skipping", dataset)
             continue
 
+        # Build full path to the data file
         file_path = data_dir / str(file_name)
 
-        # Skip datasets that are not present in this folder
+        # Skip datasets whose files aren't present in the data directory
         if not file_path.exists():
             logger.warning("Dataset '%s' file not found in data_dir; skipping: %s", dataset, file_path.name)
             continue
 
-        # Load + standardise via file_ingest
+        # Load and standardize the dataset using file_ingest module
+        # This handles: ID standardization, column renaming, required column validation
         try:
             df = load_dataset_frame(dataset=dataset, file_path=file_path, schema=schema)
         except Exception as e:
             logger.error("Failed to load dataset '%s' from '%s': %s", dataset, file_path.name, e)
             continue
 
+        # Store successfully loaded dataset
         results[dataset] = df
         logger.info("Loaded dataset '%s' -> %d rows, %d cols", dataset, df.shape[0], df.shape[1])
 
-        # Optionally cache as parquet
+        # Write cleaned dataset to parquet cache if cache_dir was provided
         if cache_path is not None:
             out_path = cache_path / f"{dataset}.parquet"
             df.to_parquet(out_path, index=False)
@@ -103,12 +103,13 @@ def bulk_load_datasets(
 
 
 if __name__ == "__main__":
+    # Set up logging to see INFO level messages
     logging.basicConfig(level=logging.INFO)
 
-    # Load schema once
+    # Load the schema registry once (defines all datasets and variable mappings)
     schema = load_schema_registry("schema/datasets.yaml", "schema/variables.csv")
 
-    # Convention: raw uploads go in data/raw, cleaned cache goes in data/clean
+    # Load all datasets: raw files from data/raw, write cleaned cache to data/clean
     dfs = bulk_load_datasets(
         data_dir="data/raw",
         cache_dir="data/clean",

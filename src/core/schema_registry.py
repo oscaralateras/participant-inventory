@@ -34,6 +34,8 @@ class SchemaRegistry:
     variables_by_dataset: dict[str, list[dict[str, str]]]
     source_to_canonical_by_dataset: dict[str, dict[str, str]]
     required_vars_by_dataset: dict[str, set[str]]
+    sql_types_by_dataset: dict[str, dict[str, str]]  
+
 
     # ID rules
     participant_id_column: str
@@ -111,7 +113,7 @@ def _load_csv(path: Path) -> list[dict[str, str]]:
     Raises:
         ValueError: If required headers are missing or if any row is invalid.
     """
-    required_headers = {"dataset", "source_column", "variable_name", "is_required"}
+    required_headers = {"dataset", "source_column", "variable_name", "is_required", "sql_type"}  # Add sql_type
 
     try:
         # Open and parse the CSV into dict rows keyed by the header names
@@ -201,7 +203,7 @@ def _group_by_dataset(rows: list[dict[str, str]]) -> dict[str, list[dict[str, st
 
 def _build_lookup_maps(
     variables_by_dataset: dict[str, list[dict[str, str]]],
-) -> tuple[dict[str, dict[str, str]], dict[str, set[str]]]:
+) -> tuple[dict[str, dict[str, str]], dict[str, set[str]], dict[str, dict[str, str]]]:  # Add third return type
     """
     Build lookup maps used by ingestion/validation.
 
@@ -209,26 +211,32 @@ def _build_lookup_maps(
         variables_by_dataset: Dict mapping dataset -> list of variable rows.
 
     Returns:
-        (source_to_canonical_by_dataset, required_vars_by_dataset)
+        (source_to_canonical_by_dataset, required_vars_by_dataset, sql_types_by_dataset)
 
         source_to_canonical_by_dataset:
             dataset -> {source_column -> variable_name}
 
         required_vars_by_dataset:
             dataset -> set(variable_name) for rows marked required
+            
+        sql_types_by_dataset:
+            dataset -> {variable_name -> sql_type}
     """
     source_to_canonical: dict[str, dict[str, str]] = {}
     required_vars: dict[str, set[str]] = {}
+    sql_types: dict[str, dict[str, str]] = {}  
 
     truthy = {"true", "1", "yes", "y"}
 
     for dataset, rows in variables_by_dataset.items():
         source_map: dict[str, str] = {}
         required_set: set[str] = set()
+        types_map: dict[str, str] = {}  
 
         for r in rows:
             src = r["source_column"]
             canon = r["variable_name"]
+            sql_type = r.get("sql_type", "TEXT").strip().upper()  
 
             # Prevent ambiguous mappings like: Age -> age AND Age -> age_years
             if src in source_map and source_map[src] != canon:
@@ -240,6 +248,7 @@ def _build_lookup_maps(
                 raise ValueError(msg)
 
             source_map[src] = canon
+            types_map[canon] = sql_type  
 
             # Mark required variables
             if (r.get("is_required") or "").strip().lower() in truthy:
@@ -247,9 +256,9 @@ def _build_lookup_maps(
 
         source_to_canonical[dataset] = source_map
         required_vars[dataset] = required_set
+        sql_types[dataset] = types_map  
 
-    return source_to_canonical, required_vars
-
+    return source_to_canonical, required_vars, sql_types  # Update return
 
 # -----------------------------
 # Main loader
@@ -300,7 +309,7 @@ def load_schema_registry(
     variables_by_dataset = _group_by_dataset(variables_rows)
 
     # Build maps used to rename columns and validate required fields
-    source_to_canonical_by_dataset, required_vars_by_dataset = _build_lookup_maps(variables_by_dataset)
+    source_to_canonical_by_dataset, required_vars_by_dataset, sql_types_by_dataset = _build_lookup_maps(variables_by_dataset)  # Add sql_types_by_dataset
 
     # Read canonical participant ID column name (default to "participant_id" if missing)
     participant_id_column = str(datasets_yaml.get("participant_id_column", "participant_id"))
@@ -337,6 +346,7 @@ def load_schema_registry(
         variables_by_dataset=variables_by_dataset,
         source_to_canonical_by_dataset=source_to_canonical_by_dataset,
         required_vars_by_dataset=required_vars_by_dataset,
+        sql_types_by_dataset=sql_types_by_dataset,  
         participant_id_column=participant_id_column,
         id_aliases=id_aliases,
     )

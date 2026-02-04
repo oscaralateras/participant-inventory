@@ -128,6 +128,55 @@ def get_participant_ids(engine, **filters) -> list[str]:
         return extracted_ids
 
 
+def get_participants_data(engine, **filters) -> pd.DataFrame:
+    """
+    Get full data for participants matching filters.
+    
+    Args:
+        engine: SQLAlchemy engine
+        **filters: Any column name with value to filter on
+        
+    Returns:
+        DataFrame with all columns from inventory_summary
+    """
+    # Start with base SQL query to select all columns
+    sql_query = """
+    SELECT * FROM inventory_summary
+    """
+    
+    # Initialize empty list to collect WHERE conditions
+    conditions = []
+
+    # Loop through each filter passed by user
+    for column_name, value in filters.items():
+        
+        # Handle minimum range filters (age_min, bdi_total_min, etc.)
+        if column_name.endswith('_min'):
+            actual_column = column_name.replace('_min', '')
+            conditions.append(f"{actual_column} >= {value}")
+        
+        # Handle maximum range filters (age_max, bdi_total_max, etc.)
+        elif column_name.endswith('_max'):
+            actual_column = column_name.replace('_max', '')
+            conditions.append(f"{actual_column} <= {value}")
+        
+        # Handle equality filters (sex, dx, has_dti, etc.)
+        else:
+            if isinstance(value, str):
+                conditions.append(f"{column_name} = '{value}'")
+            else:
+                conditions.append(f"{column_name} = {value}")
+    
+    # Only add WHERE clause if there are conditions
+    if len(conditions) > 0:
+        where_clause = " AND ".join(conditions)
+        sql_query += f" WHERE {where_clause}"
+    
+    # Execute query and return DataFrame
+    with engine.connect() as conn:
+        df = pd.read_sql(text(sql_query), conn)
+        return df
+
 if __name__ == "__main__":
     # Set up logging
     logging.basicConfig(level=logging.INFO)
@@ -151,9 +200,15 @@ if __name__ == "__main__":
     complex = count_with_filters(engine, sex='1', has_dti=True, age_min=25)
     print(f"Females with DTI, age 25+: {complex}")
     
+    
     # Test 5: Get participant IDs for females aged 25+
     ids = get_participant_ids(engine, sex='1', age_min=25)
     print(f"\nSample IDs (females 25+): {ids[:5]}")  # Show first 5
     print(f"Total IDs returned: {len(ids)}")
+    
+    # Test 6: Get full data for males aged 40-60
+    data = get_participants_data(engine, sex='0', age_min=40, age_max=60)
+    print(f"\nDataFrame shape (males 40-60): {data.shape}")
+    print(f"Columns: {list(data.columns[:5])}...")  # Show first 5 columns
     
     print("\n✓ All filter tests complete!")

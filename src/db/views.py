@@ -47,28 +47,73 @@ def create_inventory_summary_view(schema: SchemaRegistry, engine) -> None:
     LEFT JOIN subcortical_volumes sv ON bc.participant_id = sv.participant_id
     LEFT JOIN cortical_surface_area csa ON bc.participant_id = csa.participant_id
     """
+    # Execute the SQL to create the materialized view
+    with engine.connect() as conn:
+        conn.execute(text(create_view_sql))
+        conn.commit()
+
+    logger.info("Created materialized view 'inventory_summary'")
+
+def create_full_data_view(schema: SchemaRegistry, engine) -> None:
+    """Create full data view with all columns from all datasets."""
+    
+    # Start with all basic_covariates columns
+    included_columns = set(schema.sql_types_by_dataset['basic_covariates'].keys())
+    
+    # Build select clauses for each dataset
+    datasets = [
+        ('ind', 'individual_symptoms'),
+        ('dti', 'dti'),
+        ('ct', 'cortical_thickness'),
+        ('sv', 'subcortical_volumes'),
+        ('csa', 'cortical_surface_area')
+    ]
+    
+    select_parts = []
+    for alias, dataset_name in datasets:
+        # Get columns that haven't been included yet
+        cols = [c for c in schema.sql_types_by_dataset[dataset_name].keys() 
+                if c not in included_columns]
+        # Track these columns so we skip them in future datasets
+        included_columns.update(cols)
+        # Build "alias.col1, alias.col2, ..." string
+        if cols:  # Only add if there are columns
+            select_parts.append(", ".join([f"{alias}.{c}" for c in cols]))
+    
+    # Join all parts
+    all_selects = ",\n        ".join(select_parts)
+    
+    create_view_sql = f"""
+    CREATE MATERIALIZED VIEW IF NOT EXISTS full_data_view AS
+    SELECT 
+        bc.*,
+        {all_selects}
+    FROM basic_covariates bc
+    LEFT JOIN individual_symptoms ind ON bc.participant_id = ind.participant_id
+    LEFT JOIN dti ON bc.participant_id = dti.participant_id
+    LEFT JOIN cortical_thickness ct ON bc.participant_id = ct.participant_id
+    LEFT JOIN subcortical_volumes sv ON bc.participant_id = sv.participant_id
+    LEFT JOIN cortical_surface_area csa ON bc.participant_id = csa.participant_id
+    """
     
     # Execute the SQL to create the materialized view in Postgres
     with engine.connect() as conn:
         conn.execute(text(create_view_sql))
         conn.commit()
     
-    logger.info("Created materialized view 'inventory_summary'")
-
+    logger.info("Created materialized view 'full_data_view'")
+    
 if __name__ == "__main__":
     import logging
     from src.core.schema_registry import load_schema_registry
     
-    # Set up logging to see INFO messages
     logging.basicConfig(level=logging.INFO)
     
-    # Load schema registry
     schema = load_schema_registry("schema/datasets.yaml", "schema/variables.csv")
-    
-    # Get database engine
     engine = get_engine()
     
-    # Create the inventory summary view
+    # Create both views
     create_inventory_summary_view(schema, engine)
+    create_full_data_view(schema, engine)
     
-    print("\n✓ Inventory summary view created!")
+    print("\n✓ Both materialized views created!")

@@ -64,6 +64,69 @@ def count_with_filters(engine, **filters) -> int:
         query_result = result.scalar()
         return query_result
 
+def get_participant_ids(engine, **filters) -> list[str]:
+    """
+    Get list of participant IDs matching filters.
+    
+    Args:
+        engine: SQLAlchemy engine
+        **filters: Any column name with value to filter on
+        
+    Returns:
+        List of participant IDs
+    """
+    # Start with base SQL query to select participant IDs
+    sql_query = """
+    SELECT participant_id FROM inventory_summary
+    """
+    
+    # Initialize empty list to collect WHERE conditions
+    conditions = []
+
+    # Loop through each filter passed by user
+    for column_name, value in filters.items():
+        
+        # Handle minimum range filters (age_min, bdi_total_min, etc.)
+        if column_name.endswith('_min'):
+            # Extract actual column name: 'age_min' -> 'age'
+            actual_column = column_name.replace('_min', '')
+            # Build condition: "age >= 25"
+            conditions.append(f"{actual_column} >= {value}")
+        
+        # Handle maximum range filters (age_max, bdi_total_max, etc.)
+        elif column_name.endswith('_max'):
+            # Extract actual column name: 'age_max' -> 'age'
+            actual_column = column_name.replace('_max', '')
+            # Build condition: "age <= 50"
+            conditions.append(f"{actual_column} <= {value}")
+        
+        # Handle equality filters (sex, dx, has_dti, etc.)
+        else:
+            # Check if value is a string - strings need quotes in SQL
+            if isinstance(value, str):
+                # Build condition with quotes: "sex = '0'"
+                conditions.append(f"{column_name} = '{value}'")
+            else:
+                # Build condition without quotes: "has_dti = True" or "age = 25"
+                conditions.append(f"{column_name} = {value}")
+    
+    # Only add WHERE clause if there are conditions
+    if len(conditions) > 0:
+        # Join all conditions with AND: "age >= 25 AND sex = '0' AND has_dti = True"
+        where_clause = " AND ".join(conditions)
+        # Add WHERE clause to query
+        sql_query += f" WHERE {where_clause}"
+    
+    # Execute the query and return list of participant IDs
+    with engine.connect() as conn:
+        # Execute query
+        result = conn.execute(text(sql_query))
+        # Fetch all rows (each row is a tuple with one element: participant_id)
+        query_result = result.fetchall()
+        # Extract participant IDs from tuples: [(id1,), (id2,)] -> [id1, id2]
+        extracted_ids = [row[0] for row in query_result]
+        return extracted_ids
+
 
 if __name__ == "__main__":
     # Set up logging
@@ -87,5 +150,10 @@ if __name__ == "__main__":
     # Test 4: Count females with DTI data, age 25 or older
     complex = count_with_filters(engine, sex='1', has_dti=True, age_min=25)
     print(f"Females with DTI, age 25+: {complex}")
+    
+    # Test 5: Get participant IDs for females aged 25+
+    ids = get_participant_ids(engine, sex='1', age_min=25)
+    print(f"\nSample IDs (females 25+): {ids[:5]}")  # Show first 5
+    print(f"Total IDs returned: {len(ids)}")
     
     print("\n✓ All filter tests complete!")
